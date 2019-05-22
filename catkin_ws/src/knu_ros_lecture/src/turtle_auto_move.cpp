@@ -28,6 +28,7 @@
 //
 #define toRadian(degree)	((degree) * (M_PI / 180.))
 #define toDegree(radian)	((radian) * (180. / M_PI))
+#define MAP_SIZE 800
 
 using namespace std;
 using namespace cv;
@@ -64,6 +65,36 @@ void odomMsgCallback(const nav_msgs::Odometry &msg)
 
 }
 
+///////////////////////////////////////////////////////////
+/*** odom으로부터 받은 좌표를 평면좌표로 변환하는 function ***/
+void convertOdom2XYZ(nav_msgs::Odometry &odom, Vec3d &curPos, Vec3d &curRot)
+{
+        // 이동 저장
+        curPos[0] = odom.pose.pose.position.x;
+        curPos[1] = odom.pose.pose.position.y;
+        curPos[2] = odom.pose.pose.position.z;
+
+        // 회전 저장
+        tf::Quaternion rotationQuat = tf::Quaternion(odom.pose.pose.orientation.x, odom.pose.pose.orientation.y, odom.pose.pose.orientation.z, odom.pose.pose.orientation.w);
+        tf::Matrix3x3(rotationQuat).getEulerYPR(curRot[2], curRot[1], curRot[0]);
+
+}
+
+//3차원 point인 laserScanXY를 world coordinate로 변환
+void transformScanXY(vector<Vec3d> &laserScanXY, double x, double y, double theta)
+{
+        Vec3d newPoint; 
+        double cosTheta = cos(theta);
+        double sinTheta = sin(theta);
+        int nRangeSize = (int)laserScanXY.size();
+
+        for(int i = 0 ; i < nRangeSize ; i++) {
+                newPoint[0] = cosTheta*laserScanXY[i][0] + -1.*sinTheta*laserScanXY[i][1] + x;
+                newPoint[1] = sinTheta*laserScanXY[i][0] + cosTheta*laserScanXY[i][1] + y;
+                newPoint[2];
+                laserScanXY[i] = newPoint;
+        }
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -148,7 +179,6 @@ bool doRotation(ros::Publisher &pubTeleop, tf::Transform &initialTransformation,
 		tf::Quaternion rotationQuat = relativeTransformation.getRotation();
 
 
-
 		double dAngleTurned = atan2((2 * rotationQuat[2] * rotationQuat[3]) , (1-(2 * (rotationQuat[2] * rotationQuat[2]) ) ));
 
 		// Check termination condition
@@ -179,10 +209,11 @@ bool doRotation(ros::Publisher &pubTeleop, tf::Transform &initialTransformation,
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Move
 	bool
-doTranslation(ros::Publisher &pubTeleop, tf::Transform &initialTransformation, double dTranslation, double dTranslationSpeed)
+doTranslation(ros::Publisher &pubTeleop, tf::Transform &initialTransformation, double dTranslation, double dTranslationSpeed, Vec3d &curPos, Vec3d &initPos, Vec3d &curRot, bool flag, vector<Vec3d> &route)
 {
 	//the command will be to go forward at 'translationSpeed' m/s
 	geometry_msgs::Twist baseCmd;
+	nav_msgs::Odometry odom;
 
 	if(dTranslation < 0) {
 		baseCmd.linear.x = -dTranslationSpeed;
@@ -204,11 +235,32 @@ doTranslation(ros::Publisher &pubTeleop, tf::Transform &initialTransformation, d
 		// get current transformation
 		tf::Transform currentTransformation = getCurrentTransformation();
 
+		/* odom */
+                mutex[0].lock(); {
+                        odom = g_odom;
+                } mutex[0].unlock();
+
+		// odom으로부터 이동정보 획득
+                convertOdom2XYZ(odom, curPos, curRot);
+                // route에 저장
+		double x = curPos[0];
+		double y = curPos[1];
+		if(x!=0 && y!=0) {
+			route.push_back(Vec3d(x,y));
+			if(flag == false) {
+				initPos[0] = x; initPos[1] = y;
+				flag = true;
+	                        printf("***************** init : %lf , %lf *****************\n", initPos[0], initPos[1]);
+			}
+		}
+		printf("******* cur : %lf , %lf *******\n", curPos[0], curPos[1]);
+		
+
+		/* Check termination condition */
 		//see how far we've traveled
 		tf::Transform relativeTransformation = initialTransformation.inverse() * currentTransformation ;
 		double dDistMoved = relativeTransformation.getOrigin().length();
 
-		// Check termination condition
 		if(fabs(dDistMoved) >= fabs(dTranslation)) {
 			bDone = true;
 			break;
@@ -229,7 +281,7 @@ doTranslation(ros::Publisher &pubTeleop, tf::Transform &initialTransformation, d
 	return bDone;
 }
 
-/////////////////////////********lidar scan*********///////////////////////////////
+/////////////////////////********lidar_scan*********///////////////////////////////
 
 template<typename T>
 inline bool isnan(T value){
@@ -261,10 +313,11 @@ initGrid(Mat &display, int nImageSize)
 	const int nAxisSize = nImageSize/16;
 	const Vec2i imageCenterCooord = Vec2i(nImageHalfSize, nImageHalfSize);
 	display = Mat::zeros(nImageSize, nImageSize, CV_8UC3);
-	line(display, Point(imageCenterCooord[0], imageCenterCooord[1]),
-			Point(imageCenterCooord[0]+nAxisSize, imageCenterCooord[1]), Scalar(0, 0, 255), 2);
-	line(display, Point(imageCenterCooord[0], imageCenterCooord[1]),
-			Point(imageCenterCooord[0], imageCenterCooord[1]+nAxisSize), Scalar(0, 255, 0), 2);
+	//x축
+//      line(display, Point(imageCenterCooord[0], imageCenterCooord[1]), Point(imageCenterCooord[0]+nAxisSize, imageCenterCooord[1]), Scalar(0, 0, 255), 2);
+//        line(display, Point(curPos[0], curPos[1]), Point(curPos[0]+nAxisSize, curPos[1]), Scalar(0, 0, 255), 10);
+        //y축   
+//        line(display, Point(curPos[0], curPos[1]), Point(curPos[0], curPos[1]+nAxisSize), Scalar(0, 255, 0), 10);
 }
 
 
@@ -291,13 +344,38 @@ drawLRFScan(Mat &display, vector<Vec3d> &laserScanXY, double dMaxDist)
 		}
 	}
 }
+
+//initial point부터 current position까지 line을 그려주는 function
+void drawOdom(Mat &display, vector<Vec3d> &route, int rSize, double dMaxDist)
+{
+        Vec2i imageHalfSize = Vec2i(display.cols/2, display.rows/2);
+	Vec3d prePos, curPos;
+
+	for(int i = 1; i < rSize; i++) {
+		prePos[0] = route[i-1][0], prePos[1] = route[i-1][1];
+		curPos[0] = route[i][0], curPos[1] = route[i][1];
+
+        // pre location
+        int preX = imageHalfSize[0] + cvRound((prePos[0]/dMaxDist)*imageHalfSize[0]);
+        int preY = imageHalfSize[1] + cvRound((prePos[1]/dMaxDist)*imageHalfSize[1]);
+
+        // current location
+        int curX = imageHalfSize[0] + cvRound((curPos[0]/dMaxDist)*imageHalfSize[0]);
+        int curY = imageHalfSize[1] + cvRound((curPos[1]/dMaxDist)*imageHalfSize[1]);
+		line(display, Point(preX, preY), Point(curX, curY), Scalar(255,0,0), 3);	
+	}
+        //circle(display, Point(cutX, initY), 8, Scalar(0,255,0));
+
+}
+
 ////////////////////
 
 void
-displayRoute(Mat &display) {
+displayRoute(Mat &display, vector<Vec3d> &route, Vec3d &curRot) {
 	sensor_msgs::LaserScan scan;
 	vector<Vec3d> laserScanXY;
 	const double dGridMaxDist = 4.5;
+	int routeSize = route.size();
 
 
 	ros::spinOnce();
@@ -308,9 +386,16 @@ displayRoute(Mat &display) {
 	} mutex[1].unlock();
 	// scan으로부터 Cartesian X-Y scan 획득
 	convertScan2XYZs(scan, laserScanXY);
+	// convert laserScan into 2D coordinate
+	Vec3d curPos = route[routeSize-1];
+        transformScanXY(laserScanXY, curPos[0], curPos[1], curRot[2]);
+
+
 	// 현재 상황을 draw할 display 이미지를 생성
-	initGrid(display, 801);
+	initGrid(display, MAP_SIZE);
 	drawLRFScan(display, laserScanXY, dGridMaxDist);
+	drawOdom(display, route, routeSize, dGridMaxDist);
+
 	// 2D 영상좌표계에서 top-view 방식의 3차원 월드좌표계로 변환
 	//transpose(display, display); // X-Y축 교환
 	//flip(display, display, 0); // 수평방향 반전
@@ -320,11 +405,8 @@ displayRoute(Mat &display) {
 	
 
 	// 사용자의 키보드 입력을 받음!
-//	int nKey = waitKey(30) % 255;
-//	if(nKey == 27) {
-//		break;
-//	}
-	// 종료
+	waitKey(30);
+
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////
@@ -338,7 +420,11 @@ int main(int argc, char **argv)
 	/***lidar***/
 	ros::Subscriber subScan = nh.subscribe("/scan", 10, &scanMsgCallback);
 	Mat display;
-	initGrid(display, 801);//openCV display buffer
+	initGrid(display, MAP_SIZE);//openCV display buffer
+	/***openCVdisplay***/
+	Vec3d curPos, prePos, curRot;
+	vector<Vec3d> route;
+	bool flag = false;
 
 	/* 1. Read robot path from txt */
 	char txtPath[100] = "/home/sunny/catkin_ws/src/knu_ros_lecture/src/input.txt";
@@ -367,7 +453,7 @@ int main(int argc, char **argv)
 		printf("\n## goal point: (%.2lf, %.2lf)\n", x[i], y[i]);
 
 		// 2-1. Sleep for 1 sec
-		ros::Duration(1, 0).sleep();
+		ros::Duration(0.5, 0).sleep();
 
 		// 2-3. Rotate robot.
 		double angle = atan2(y[i]-nextTransformation.getOrigin().getY(), x[i]-nextTransformation.getOrigin().getX());
@@ -380,13 +466,13 @@ int main(int argc, char **argv)
 
 		// 2-4. Move robot forward.
 		double distance = sqrt((pow(x[i]-nextTransformation.getOrigin().getX(), 2.0)) + (pow(y[i]-nextTransformation.getOrigin().getY(), 2.0)));
-		doTranslation(pub, nextTransformation, distance, linear_vel);
+		doTranslation(pub, nextTransformation, distance, linear_vel, curPos, prePos, curRot, flag, route);
 		prev_angle = angle;
 
 
-		/* 3. lidar scan  */
-		displayRoute(display);
-
+		/* 3. display opencv window  */
+		displayRoute(display, route, curRot);
+		
 	}
 	return 0;
 }
