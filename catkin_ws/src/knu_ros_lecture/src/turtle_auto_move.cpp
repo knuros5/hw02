@@ -69,31 +69,31 @@ void odomMsgCallback(const nav_msgs::Odometry &msg)
 /*** odom으로부터 받은 좌표를 평면좌표로 변환하는 function ***/
 void convertOdom2XYZ(nav_msgs::Odometry &odom, Vec3d &curPos, Vec3d &curRot)
 {
-        // 이동 저장
-        curPos[0] = odom.pose.pose.position.x;
-        curPos[1] = odom.pose.pose.position.y;
-        curPos[2] = odom.pose.pose.position.z;
+	// 이동 저장
+	curPos[0] = odom.pose.pose.position.x;
+	curPos[1] = odom.pose.pose.position.y;
+	curPos[2] = odom.pose.pose.position.z;
 
-        // 회전 저장
-        tf::Quaternion rotationQuat = tf::Quaternion(odom.pose.pose.orientation.x, odom.pose.pose.orientation.y, odom.pose.pose.orientation.z, odom.pose.pose.orientation.w);
-        tf::Matrix3x3(rotationQuat).getEulerYPR(curRot[2], curRot[1], curRot[0]);
+	// 회전 저장
+	tf::Quaternion rotationQuat = tf::Quaternion(odom.pose.pose.orientation.x, odom.pose.pose.orientation.y, odom.pose.pose.orientation.z, odom.pose.pose.orientation.w);
+	tf::Matrix3x3(rotationQuat).getEulerYPR(curRot[2], curRot[1], curRot[0]);
 
 }
 
 //3차원 point인 laserScanXY를 world coordinate로 변환
 void transformScanXY(vector<Vec3d> &laserScanXY, double x, double y, double theta)
 {
-        Vec3d newPoint; 
-        double cosTheta = cos(theta);
-        double sinTheta = sin(theta);
-        int nRangeSize = (int)laserScanXY.size();
+	Vec3d newPoint; 
+	double cosTheta = cos(theta);
+	double sinTheta = sin(theta);
+	int nRangeSize = (int)laserScanXY.size();
 
-        for(int i = 0 ; i < nRangeSize ; i++) {
-                newPoint[0] = cosTheta*laserScanXY[i][0] + -1.*sinTheta*laserScanXY[i][1] + x;
-                newPoint[1] = sinTheta*laserScanXY[i][0] + cosTheta*laserScanXY[i][1] + y;
-                newPoint[2];
-                laserScanXY[i] = newPoint;
-        }
+	for(int i = 0 ; i < nRangeSize ; i++) {
+		newPoint[0] = cosTheta*laserScanXY[i][0] + -1.*sinTheta*laserScanXY[i][1] + x;
+		newPoint[1] = sinTheta*laserScanXY[i][0] + cosTheta*laserScanXY[i][1] + y;
+		newPoint[2];
+		laserScanXY[i] = newPoint;
+	}
 }
 
 
@@ -236,25 +236,10 @@ doTranslation(ros::Publisher &pubTeleop, tf::Transform &initialTransformation, d
 		tf::Transform currentTransformation = getCurrentTransformation();
 
 		/* odom */
-                mutex[0].lock(); {
-                        odom = g_odom;
-                } mutex[0].unlock();
+		mutex[0].lock(); {
+			odom = g_odom;
+		} mutex[0].unlock();
 
-		// odom으로부터 이동정보 획득
-                convertOdom2XYZ(odom, curPos, curRot);
-                // route에 저장
-		double x = curPos[0];
-		double y = curPos[1];
-		if(x!=0 && y!=0) {
-			route.push_back(Vec3d(x,y));
-			if(flag == false) {
-				initPos[0] = x; initPos[1] = y;
-				flag = true;
-	                        printf("***************** init : %lf , %lf *****************\n", initPos[0], initPos[1]);
-			}
-		}
-		printf("******* cur : %lf , %lf *******\n", curPos[0], curPos[1]);
-		
 
 		/* Check termination condition */
 		//see how far we've traveled
@@ -263,6 +248,22 @@ doTranslation(ros::Publisher &pubTeleop, tf::Transform &initialTransformation, d
 
 		if(fabs(dDistMoved) >= fabs(dTranslation)) {
 			bDone = true;
+
+			// odom으로부터 이동정보 획득
+			convertOdom2XYZ(odom, curPos, curRot);
+			// route에 저장
+			double x = curPos[0];
+			double y = curPos[1];
+			if(x!=0 && y!=0) {
+				route.push_back(Vec3d(x,y));
+				if(flag == false) {
+					initPos[0] = x; initPos[1] = y;
+					flag = true;
+					printf("***************** init : %lf , %lf *****************\n", initPos[0], initPos[1]);
+				}
+			}
+			printf("******* cur : %lf , %lf *******\n", curPos[0], curPos[1]);
+	
 			break;
 		} else {
 			//send the drive command
@@ -306,7 +307,7 @@ convertScan2XYZs(sensor_msgs::LaserScan& lrfScan, vector<Vec3d> &XYZs)
 }
 
 
-void
+	void
 initGrid(Mat &display, int nImageSize)
 {
 	const int nImageHalfSize = nImageSize/2;
@@ -314,14 +315,14 @@ initGrid(Mat &display, int nImageSize)
 	const Vec2i imageCenterCooord = Vec2i(nImageHalfSize, nImageHalfSize);
 	display = Mat::zeros(nImageSize, nImageSize, CV_8UC3);
 	//x축
-//      line(display, Point(imageCenterCooord[0], imageCenterCooord[1]), Point(imageCenterCooord[0]+nAxisSize, imageCenterCooord[1]), Scalar(0, 0, 255), 2);
-//        line(display, Point(curPos[0], curPos[1]), Point(curPos[0]+nAxisSize, curPos[1]), Scalar(0, 0, 255), 10);
-        //y축   
-//        line(display, Point(curPos[0], curPos[1]), Point(curPos[0], curPos[1]+nAxisSize), Scalar(0, 255, 0), 10);
+	//      line(display, Point(imageCenterCooord[0], imageCenterCooord[1]), Point(imageCenterCooord[0]+nAxisSize, imageCenterCooord[1]), Scalar(0, 0, 255), 2);
+	//        line(display, Point(curPos[0], curPos[1]), Point(curPos[0]+nAxisSize, curPos[1]), Scalar(0, 0, 255), 10);
+	//y축   
+	//        line(display, Point(curPos[0], curPos[1]), Point(curPos[0], curPos[1]+nAxisSize), Scalar(0, 255, 0), 10);
 }
 
 
-void
+	void
 scanMsgCallback(const sensor_msgs::LaserScan& msg)
 {
 	// receive a '/odom' message with the mutex
@@ -330,7 +331,7 @@ scanMsgCallback(const sensor_msgs::LaserScan& msg)
 	} mutex[1].unlock();
 }
 
-void
+	void
 drawLRFScan(Mat &display, vector<Vec3d> &laserScanXY, double dMaxDist)
 {
 	Vec2i imageHalfSize = Vec2i(display.cols/2, display.rows/2);
@@ -348,23 +349,24 @@ drawLRFScan(Mat &display, vector<Vec3d> &laserScanXY, double dMaxDist)
 //initial point부터 current position까지 line을 그려주는 function
 void drawOdom(Mat &display, vector<Vec3d> &route, int rSize, double dMaxDist)
 {
-        Vec2i imageHalfSize = Vec2i(display.cols/2, display.rows/2);
+	Vec2i imageHalfSize = Vec2i(display.cols/2, display.rows/2);
 	Vec3d prePos, curPos;
 
 	for(int i = 1; i < rSize; i++) {
 		prePos[0] = route[i-1][0], prePos[1] = route[i-1][1];
 		curPos[0] = route[i][0], curPos[1] = route[i][1];
 
-        // pre location
-        int preX = imageHalfSize[0] + cvRound((prePos[0]/dMaxDist)*imageHalfSize[0]);
-        int preY = imageHalfSize[1] + cvRound((prePos[1]/dMaxDist)*imageHalfSize[1]);
+		// pre location
+		int preX = imageHalfSize[0] + cvRound((prePos[0]/dMaxDist)*imageHalfSize[0]);
+		int preY = imageHalfSize[1] + cvRound((prePos[1]/dMaxDist)*imageHalfSize[1]);
 
-        // current location
-        int curX = imageHalfSize[0] + cvRound((curPos[0]/dMaxDist)*imageHalfSize[0]);
-        int curY = imageHalfSize[1] + cvRound((curPos[1]/dMaxDist)*imageHalfSize[1]);
-		line(display, Point(preX, preY), Point(curX, curY), Scalar(255,0,0), 3);	
+		// current location
+		int curX = imageHalfSize[0] + cvRound((curPos[0]/dMaxDist)*imageHalfSize[0]);
+		int curY = imageHalfSize[1] + cvRound((curPos[1]/dMaxDist)*imageHalfSize[1]);
+
+		line(display, Point(preX, preY), Point(curX, curY), Scalar(255,0,0), 3);
+		circle(display, Point(curX, curY), 8, Scalar(0,255,0));		
 	}
-        //circle(display, Point(cutX, initY), 8, Scalar(0,255,0));
 
 }
 
@@ -388,7 +390,7 @@ displayRoute(Mat &display, vector<Vec3d> &route, Vec3d &curRot) {
 	convertScan2XYZs(scan, laserScanXY);
 	// convert laserScan into 2D coordinate
 	Vec3d curPos = route[routeSize-1];
-        transformScanXY(laserScanXY, curPos[0], curPos[1], curRot[2]);
+	transformScanXY(laserScanXY, curPos[0], curPos[1], curRot[2]);
 
 
 	// 현재 상황을 draw할 display 이미지를 생성
@@ -402,7 +404,7 @@ displayRoute(Mat &display, vector<Vec3d> &route, Vec3d &curRot) {
 	//flip(display, display, 1); // 수직방향 반전
 	imshow("KNU ROS Lecture >> turtle_kinect_lrf_view", display);
 	// image 출력
-	
+
 
 	// 사용자의 키보드 입력을 받음!
 	waitKey(30);
@@ -442,10 +444,10 @@ int main(int argc, char **argv)
 	double linear_vel = 0.25;
 	double prev_angle = 0;
 
-	
+
 	//move 10 times
 	for(int i = 0; i < num; i++){
-	
+
 		/* 2. Get initial position */
 		tf::Transform nextTransformation = getInitialTransformation();
 
@@ -472,7 +474,7 @@ int main(int argc, char **argv)
 
 		/* 3. display opencv window  */
 		displayRoute(display, route, curRot);
-		
+
 	}
 	return 0;
 }
