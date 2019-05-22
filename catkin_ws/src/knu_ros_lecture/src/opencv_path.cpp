@@ -150,8 +150,9 @@ void drawOdom(Mat &display, Vec3d &curPos, Vec3d &initPos, double dMaxDist)
 	int curX = imageHalfSize[0] + cvRound((curPos[0]/dMaxDist)*imageHalfSize[0]);
 	int curY = imageHalfSize[1] + cvRound((curPos[1]/dMaxDist)*imageHalfSize[1]);
 
-	//draw line
+
 	line(display, Point(initX, initY), Point(curX, curY), Scalar(255,0,0), 3);
+	circle(display, Point(initX, initY), 8, Scalar(0,255,0));
 
 }
 
